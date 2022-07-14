@@ -2,6 +2,7 @@ import requests
 import os
 import pandas as pd
 
+
 def main():
     path_of_infiles = 'C://DL final project//episode_links_by_season'
     main_characters = ['Marshall', 'Ted', 'Barney', 'Lily', 'Robin']
