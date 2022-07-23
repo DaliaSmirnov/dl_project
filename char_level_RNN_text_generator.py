@@ -4,6 +4,7 @@ Based on the article: https://www.tensorflow.org/text/tutorials/text_generation
 import tensorflow as tf
 from keras.losses import SparseCategoricalCrossentropy
 from keras.optimizers import Adam
+import os
 from keras.callbacks import ModelCheckpoint
 import pandas as pd
 import random
@@ -120,18 +121,23 @@ class RNNCharLevelGenerator:
         return tf.strings.reduce_join(self.chars_from_ids(ids), axis=-1)
 
     @staticmethod
-    def _create_checkpoint(embedding_dim, rnn_units):
-        checkpoint_path = f'best_gru_model_dim_{embedding_dim}_rnn_units_{rnn_units}.ckpt'
-        checkpoint_callback = ModelCheckpoint(
-            filepath=checkpoint_path,
+    def _create_checkpoint(character_name):
+        # Directory where the checkpoints will be saved
+        checkpoint_dir = './training_checkpoints'
+        # Name of the checkpoint files
+        checkpoint_prefix = os.path.join(checkpoint_dir, f"ckpt_{character_name}_gru_model")
+
+        checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+            filepath=checkpoint_prefix,
             save_weights_only=True,
             save_best_only=True,
             monitor='val_loss',
             mode='min',
-            verbose=1)
+            verbose=1
+        )
         return checkpoint_callback
 
-    def train(self, embedding_dim, rnn_units, batch_size, save_best_model):
+    def train(self, embedding_dim, rnn_units, batch_size, save_best_model, character_name, epochs=50):
         dataset = self.sequences.map(self._split_input_target)
         dataset = (
             dataset
@@ -152,11 +158,14 @@ class RNNCharLevelGenerator:
         reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, mode='min',
                                                          min_lr=0.0001, verbose=1)
         if save_best_model:
-            mc = self._create_checkpoint(embedding_dim, rnn_units)
-            return self.gru_model.fit(train_dataset, validation_data=val_dataset, epochs=10,
-                                      callbacks=[es, reduce_lr, mc])
+            mc = self._create_checkpoint(character_name)
+            history = self.gru_model.fit(train_dataset, validation_data=val_dataset, epochs=epochs,
+                                         callbacks=[es, reduce_lr, mc])
 
-        return self.gru_model.fit(train_dataset, validation_data=val_dataset, epochs=50, callbacks=[es, reduce_lr])
+        history = self.gru_model.fit(train_dataset, validation_data=val_dataset, epochs=epochs,
+                                     callbacks=[es, reduce_lr])
+        # print(f"\n\nMODEL PERPLEXITY: {tf.exp(history.history['val_loss'][-1])}")
+        return history
 
     @staticmethod
     def _append_list_as_row(file_name: str, list_of_elem: List[Union[str, int, float]]):
@@ -167,7 +176,7 @@ class RNNCharLevelGenerator:
         except:
             pass
 
-    def hyperparameter_tune(self, save_results_locally, amount_iters=12):
+    def hyperparameter_tune(self, save_results_locally, epochs=50, amount_iters=12):
         """
         :param save_results_locally: saves each run's best epoch as a text file locally to view results in an easy
         to read format.
@@ -185,7 +194,7 @@ class RNNCharLevelGenerator:
 
             print(f'Current model: batch_size-{batch_size}, emb_dim-{embedding_dim}, rnn_units-{rnn_units}\n')
             history = self.train(embedding_dim=embedding_dim, rnn_units=rnn_units,
-                                 batch_size=batch_size, save_best_model=False)
+                                 batch_size=batch_size, epochs=epochs, save_best_model=False, character_name='Barney')
             best_epoch_val_loss = min(history.history["val_loss"])
             print(f'BEST EPOCH RESULT: {best_epoch_val_loss}')
 
@@ -194,10 +203,10 @@ class RNNCharLevelGenerator:
                             f'rnn_units - {rnn_units}, BEST_RESULT - {best_epoch_val_loss}\n'.strip('"')]
                 self._append_list_as_row('hyperparameter_tracker_char_level_rnn.txt', out_data)
 
-    def generate_text(self):
+    def generate_text(self, seed):
         one_step_model = OneStep(self.gru_model, self.chars_from_ids, self.ids_from_chars)
         states = None
-        next_char = tf.constant(['Have you met'])
+        next_char = tf.constant([seed])
         result = [next_char]
 
         for n in range(200):
@@ -223,13 +232,11 @@ gru.hyperparameter_tune(save_results_locally=True)
 
 from project_tools import ProjectTools
 tools = ProjectTools()
-df = tools.clean_data('/Users/daliasmirnov/Downloads/HIMYM_data.csv')
-barney_series = tools.get_data_of_character(df, 'Barney')
-
+df = tools.clean_data('HIMYM_data.csv')
+barney_series = tools.get_data_of_characters(df, ['Barney'])
 gru = RNNCharLevelGenerator(barney_series)
+gru.train(embedding_dim=512, rnn_units=1024, batch_size=32, save_best_model=True, character_name='Barney')
 
-history = gru.train(embedding_dim=512, rnn_units=1024, batch_size=32, save_best_model=False)
-gru.generate_text()
 
 
 

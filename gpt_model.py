@@ -84,7 +84,7 @@ args = Args()
 import pandas as pd
 from project_tools import ProjectTools
 tools = ProjectTools()
-df = tools.clean_data('HIMYM_data.csv')
+df = tools.clean_data('/Users/daliasmirnov/Documents/HIMYM_data_clean.csv')
 df['text'] = df['text'].apply(lambda x: x.lstrip())
 
 contexted = []
@@ -554,3 +554,6 @@ def main(df_trn, df_val):
 
 
 main(trn_df, val_df)
+
+import pandas as pd
+df = pd.read_csv('HIMYM_data.csv')
